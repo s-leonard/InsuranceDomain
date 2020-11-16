@@ -15,25 +15,26 @@
     },
     "variables": {
         "restapiname": "[concat(parameters('resourceName'), 'rest-api')]",
-        "soapapiname": "[concat(parameters('resourceName'), 'soap-api')]"
+        "soapapiname": "[concat(parameters('resourceName'), 'soap-api')]",
+        "repoUrl": "https://github.com/s-leonard/InsuranceDomain.git"
     },
     "resources": 
     [
         {
-        "apiVersion": "2015-08-01",
-        "name": "[parameters('hostingPlanName')]",
-        "type": "Microsoft.Web/serverfarms",
-        "location": "[resourceGroup().location]",
-        "tags": {
-            "displayName": "HostingPlan"
-        },
-        "sku": {
-            "name": "S1",
-            "capacity": 1
-        },
-        "properties": {
-            "name": "[parameters('hostingPlanName')]"
-        }
+            "apiVersion": "2015-08-01",
+            "name": "[parameters('hostingPlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "displayName": "HostingPlan"
+            },
+            "sku": {
+                "name": "S1",
+                "capacity": 1
+            },
+            "properties": {
+                "name": "[parameters('hostingPlanName')]"
+            }
         },
         {
             "apiVersion": "2015-08-01",
@@ -74,8 +75,11 @@
             },
             "properties": {
                 "name": "[variables('soapapiname')]",
-                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]"    
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('hostingPlanName'))]"
             }
+            
         }
     ]
   }
+
+

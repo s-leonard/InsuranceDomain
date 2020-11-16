@@ -1,0 +1,151 @@
+# ASP.NET Core (.NET Framework)
+# Build and test ASP.NET Core projects targeting the full .NET Framework.
+# Add steps that publish symbols, save build artifacts, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+trigger:
+- master
+
+variables:
+  restsolution: '**/src/RESTAPI/*.sln'
+  soapsolution: '**/src/SOAPAPI/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  poolVmImage: 'windows-latest'
+  RestZipfileName: 'RestApp.zip'
+  RestArtifactName: 'RestArtifacts'
+  SoapZipfileName: 'SoapApp.zip'
+  SoapArtifactName: 'SoapArtifacts'
+
+  # ***************************** Variables to Edit *****************************
+  serviceConnection: 'ENTER-THE-SERVICE-CONNECTION-NAME-HERE' 
+  restAppName: 'ENTER-THE-WEB-APP-NAME-HERE'
+  soapAppName: 'ENTER-THE-WEB-APP-NAME-HERE'
+  resourceGroupName: 'ENTER-YOUR-RESOURCE-GROUP-NAME-HERE'
+  # ***************************** Variables to Edit *****************************
+
+stages:
+- stage: Build
+  displayName: Build Stage
+  
+  jobs:
+    - job: BuildRestAPI
+      displayName: Build Rest API
+      pool:
+        vmImage: $(poolVmImage)
+      steps:
+      - task: NuGetToolInstaller@1
+
+      - task: NuGetCommand@2
+        inputs:
+          restoreSolution: '$(restsolution)'
+
+      # Build the project in release configuration and package it in a zip file in the build artifacts staging directory
+      - task: VSBuild@1
+        inputs:
+          solution: '$(restsolution)'
+          msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:DesktopBuildPackageLocation="$(build.artifactStagingDirectory)\$(RestZipfileName)" /p:DeployIisAppPath="Default Web Site"'
+          platform: '$(buildPlatform)'
+          configuration: '$(buildConfiguration)'
+       
+      # Publish the projects zip file as an artifact of this build      
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)'
+          artifact: '$(RestArtifactName)'
+          publishLocation: 'pipeline'
+
+    - job: BuildSoapAPI
+      displayName: Build Soap API
+      pool:
+        vmImage: $(poolVmImage)
+      steps:
+      - task: NuGetToolInstaller@1
+
+      - task: NuGetCommand@2
+        inputs:
+          restoreSolution: '$(soapsolution)'
+
+      # Build the project in release configuration and package it in a zip file in the build artifacts staging directory
+      - task: VSBuild@1
+        inputs:
+          solution: '$(soapsolution)'
+          msbuildArgs: '/p:DeployOnBuild=true /p:WebPublishMethod=Package /p:PackageAsSingleFile=true /p:SkipInvalidConfigurations=true /p:DesktopBuildPackageLocation="$(build.artifactStagingDirectory)\$(SoapZipfileName)" /p:DeployIisAppPath="Default Web Site"'
+          platform: '$(buildPlatform)'
+          configuration: '$(buildConfiguration)'
+        
+      # Publish the projects zip file as an artifact of this build      
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: '$(Build.ArtifactStagingDirectory)'
+          artifact: '$(SoapArtifactName)'
+          publishLocation: 'pipeline'
+       
+
+
+
+
+- stage: DeployRESTAPI
+  displayName: Deploy REST API
+  dependsOn: 
+  - Build
+  jobs:
+    - deployment: 'RESTAPIDeployment'
+      displayName: 'Deploy rest api Job'
+      pool: 
+        vmImage: $(poolVmImage)
+      environment: 'prod'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            
+            # Download the zip file of the built website
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                buildType: 'current'
+                artifactName: '$(RestArtifactName)'
+                targetPath: '$(Pipeline.Workspace)'
+           
+            # Deploy the application to the main slot and override app settings
+            - task: AzureRmWebAppDeployment@4
+              inputs:
+                ConnectionType: 'AzureRM'
+                azureSubscription: '$(serviceConnection)'
+                appType: 'webApp'
+                WebAppName: '$(restAppName)'
+                ResourceGroupName: '$(resourceGroupName)'
+                packageForLinux: '$(Pipeline.Workspace)/$(RestArtifactName)/$(RestZipfileName)'
+
+
+- stage: DeploySOAPAPI
+  displayName: Deploy SOAP API
+  dependsOn: 
+  - DeployRESTAPI
+  jobs:
+    - deployment: 'SOAPAPIDeployment'
+      displayName: 'Deploy SOAP api Job'
+      pool: 
+        vmImage: $(poolVmImage)
+      environment: 'prod'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            
+            # Download the zip file of the built website
+            - task: DownloadPipelineArtifact@2
+              inputs:
+                buildType: 'current'
+                artifactName: '$(SoapArtifactName)'
+                targetPath: '$(Pipeline.Workspace)'
+            
+            # Deploy the application to the main slot and override app settings
+            - task: AzureRmWebAppDeployment@4
+              inputs:
+                ConnectionType: 'AzureRM'
+                azureSubscription: '$(serviceConnection)'
+                appType: 'webApp'
+                WebAppName: '$(soapAppName)'
+                ResourceGroupName: '$(resourceGroupName)'
+                packageForLinux: '$(Pipeline.Workspace)/$(SoapArtifactName)/$(SoapZipfileName)'
